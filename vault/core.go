@@ -666,7 +666,13 @@ func (c *Core) checkToken(req *logical.Request) (*logical.Auth, *TokenEntry, err
 
 	// Check the standard non-root ACLs. Return the token entry if it's not
 	// allowed so we can decrement the use count.
-	allowed, rootPrivs := acl.AllowOperation(req)
+	allowed, rootPrivs := false, false
+	if req.Operation == logical.MultipleOperation {
+		allowed, rootPrivs = acl.AllowOperationMultiple(req)
+	} else {
+		allowed, rootPrivs = acl.AllowOperation(req)
+	}
+
 	if !allowed {
 		return nil, te, logical.ErrPermissionDenied
 	}

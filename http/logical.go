@@ -49,6 +49,8 @@ func buildLogicalRequest(core *vault.Core, w http.ResponseWriter, r *http.Reques
 		op = logical.UpdateOperation
 	case "LIST":
 		op = logical.ListOperation
+	case "MULTIPLE":
+		op = logical.MultipleOperation
 	default:
 		return nil, http.StatusMethodNotAllowed, nil
 	}
@@ -61,7 +63,7 @@ func buildLogicalRequest(core *vault.Core, w http.ResponseWriter, r *http.Reques
 
 	// Parse the request if we can
 	var data map[string]interface{}
-	if op == logical.UpdateOperation {
+	if op == logical.UpdateOperation || op == logical.MultipleOperation {
 		err := parseRequest(r, w, &data)
 		if err == io.EOF {
 			data = nil

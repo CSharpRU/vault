@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -336,6 +337,45 @@ CHECK:
 	}
 
 	return true, sudo
+}
+
+// AllowOperationMultiple is used to check if the given operation is permitted for
+// multiple paths. The first bool indicates if an op is allowed, the
+// second whether sudo privileges exist for that op and path.
+func (a *ACL) AllowOperationMultiple(req *logical.Request) (bool, bool) {
+	// Prepare paths
+	pathsRaw := req.Get("paths")
+	if pathsRaw == nil {
+		return true, false
+	}
+
+	// If it's not a slice, return true and let backend to deal with it
+	if reflect.TypeOf(pathsRaw).Kind() != reflect.Slice {
+		return true, false
+	}
+
+	pathsRawSlice := pathsRaw.([]interface{})
+	paths := make([]string, len(pathsRawSlice))
+	for i, v := range pathsRawSlice {
+		paths[i] = fmt.Sprint(v)
+	}
+
+	for _, path := range paths {
+		gluedPath := fmt.Sprintf("%s/%s", req.Path, path)
+
+		operationAllowed, sudo := a.AllowOperation(&logical.Request{
+			Operation: logical.ReadOperation,
+			Path:      gluedPath,
+			Data:      req.Data,
+			WrapInfo:  req.WrapInfo,
+		})
+
+		if !operationAllowed && !sudo {
+			return false, false
+		}
+	}
+
+	return true, false
 }
 
 func valueInParameterList(v interface{}, list []interface{}) bool {

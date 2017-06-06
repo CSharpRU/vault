@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/vault/helper/jsonutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
+	"reflect"
 )
 
 // PassthroughBackendFactory returns a PassthroughBackend
@@ -36,11 +37,12 @@ func LeaseSwitchedPassthroughBackend(conf *logical.BackendConfig, leases bool) (
 				Pattern: ".*",
 
 				Callbacks: map[logical.Operation]framework.OperationFunc{
-					logical.ReadOperation:   b.handleRead,
-					logical.CreateOperation: b.handleWrite,
-					logical.UpdateOperation: b.handleWrite,
-					logical.DeleteOperation: b.handleDelete,
-					logical.ListOperation:   b.handleList,
+					logical.ReadOperation:     b.handleRead,
+					logical.CreateOperation:   b.handleWrite,
+					logical.UpdateOperation:   b.handleWrite,
+					logical.DeleteOperation:   b.handleDelete,
+					logical.ListOperation:     b.handleList,
+					logical.MultipleOperation: b.handleMultiple,
 				},
 
 				ExistenceCheck: b.handleExistenceCheck,
@@ -144,6 +146,65 @@ func (b *PassthroughBackend) handleRead(
 	}
 
 	resp.Secret.TTL = ttlDuration
+
+	return resp, nil
+}
+
+func (b *PassthroughBackend) handleMultiple(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	// Prepare paths
+	pathsRaw := req.Get("paths")
+	if pathsRaw == nil {
+		return nil, fmt.Errorf("no paths were specified")
+	}
+
+	// If it's not a slice, return error
+	if reflect.TypeOf(pathsRaw).Kind() != reflect.Slice {
+		return nil, fmt.Errorf("paths must be specified as array")
+	}
+
+	pathsRawSlice := pathsRaw.([]interface{})
+	paths := make([]string, len(pathsRawSlice))
+	for i, v := range pathsRawSlice {
+		paths[i] = fmt.Sprint(v)
+	}
+
+	// Get all secrets
+	secrets := make(map[string]interface{})
+	for _, path := range paths {
+		out, err := req.Storage.Get(path)
+
+		if err != nil || out == nil {
+			continue
+		}
+
+		// Decode the data
+		var rawData map[string]interface{}
+
+		if err := jsonutil.DecodeJSON(out.Value, &rawData); err != nil {
+			return nil, fmt.Errorf("json decoding failed: %v", err)
+		}
+
+		secrets[path] = rawData
+	}
+
+	// Fast-path the no data case
+	if len(secrets) <= 0 {
+		return nil, nil
+	}
+
+	var resp *logical.Response
+	if b.generateLeases {
+		// Generate the response
+		resp = b.Secret("generic").Response(secrets, nil)
+		resp.Secret.Renewable = false
+	} else {
+		resp = &logical.Response{
+			Secret: &logical.Secret{},
+			Data:   secrets,
+		}
+	}
+
+	resp.Secret.TTL = b.System().DefaultLeaseTTL()
 
 	return resp, nil
 }

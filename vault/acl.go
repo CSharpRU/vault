@@ -4,10 +4,10 @@ import (
 	"reflect"
 	"strings"
 
+	"fmt"
 	"github.com/armon/go-radix"
 	"github.com/hashicorp/vault/helper/strutil"
 	"github.com/hashicorp/vault/logical"
-	"fmt"
 )
 
 // ACL is used to wrap a set of policies to provide

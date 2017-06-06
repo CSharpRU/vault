@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/vault/helper/parseutil"
 	"github.com/hashicorp/vault/helper/jsonutil"
+	"github.com/hashicorp/vault/helper/parseutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
 	"reflect"

@@ -361,7 +361,11 @@ func (a *ACL) AllowOperationMultiple(req *logical.Request) (bool, bool) {
 	}
 
 	for _, path := range paths {
-		gluedPath := fmt.Sprintf("%s/%s", req.Path, path)
+		gluedPath := path
+
+		if req.Path != "" {
+			gluedPath = fmt.Sprintf("%s/%s", req.Path, path)
+		}
 
 		operationAllowed, sudo := a.AllowOperation(&logical.Request{
 			Operation: logical.ReadOperation,

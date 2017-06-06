@@ -97,6 +97,47 @@ func TestPassthroughBackend_Read(t *testing.T) {
 	test(b, "ttl", false)
 }
 
+func TestPassthroughBackend_Multiple(t *testing.T) {
+	test := func(b logical.Backend) {
+		storage := new(logical.InmemStorage)
+
+		testData := []string{"test1", "test2"}
+
+		for _, path := range testData {
+			req := logical.TestRequest(t, logical.UpdateOperation, path)
+			req.Data[path] = path
+			req.Storage = storage
+
+			if _, err := b.HandleRequest(req); err != nil {
+				t.Fatalf("err: %v", err)
+			}
+		}
+
+		req := logical.TestRequest(t, logical.MultipleOperation, "/")
+		req.Data["paths"] = []interface{}{"test1", "test2"}
+		req.Storage = storage
+
+		resp, err := b.HandleRequest(req)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+
+		expected := &logical.Response{
+			Data: map[string]interface{}{
+				"test1": map[string]interface{}{"test1": "test1"},
+				"test2": map[string]interface{}{"test2": "test2"},
+			},
+		}
+
+		resp.Secret = nil
+		if !reflect.DeepEqual(resp, expected) {
+			t.Fatalf("bad response.\n\nexpected: %#v\n\nGot: %#v", expected, resp)
+		}
+	}
+	test(testPassthroughLeasedBackend())
+	test(testPassthroughBackend())
+}
+
 func TestPassthroughBackend_Delete(t *testing.T) {
 	test := func(b logical.Backend) {
 		req := logical.TestRequest(t, logical.UpdateOperation, "foo")

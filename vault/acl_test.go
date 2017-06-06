@@ -415,6 +415,55 @@ func TestACL_ValuePermissions(t *testing.T) {
 	}
 }
 
+func TestACL_Multiple(t *testing.T) {
+	policy, err := Parse(aclPolicy)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	acl, err := NewACL([]*Policy{policy})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	// Type of operation is not important here as we only care about checking
+	// sudo/root
+	request := new(logical.Request)
+	request.Operation = logical.ReadOperation
+	request.Path = "sys/mount/foo"
+	_, rootPrivs := acl.AllowOperation(request)
+	if rootPrivs {
+		t.Fatalf("unexpected root")
+	}
+
+	type tcase struct {
+		op        logical.Operation
+		paths     []interface{}
+		allowed   bool
+		rootPrivs bool
+	}
+	tcases := []tcase{
+		{logical.MultipleOperation, []interface{}{"prod/test1", "prod/test2"}, true, false},
+		{logical.MultipleOperation, []interface{}{"prod/test1", "prod/test2", "test/test1"}, false, false},
+		{logical.MultipleOperation, []interface{}{"test/test1", "test/test2"}, false, false},
+	}
+
+	for _, tc := range tcases {
+		request := &logical.Request{
+			Operation: tc.op,
+			Path:      "",
+			Data:      map[string]interface{}{"paths": tc.paths},
+		}
+		allowed, rootPrivs := acl.AllowOperationMultiple(request)
+		if allowed != tc.allowed {
+			t.Fatalf("bad: case %#v: %v, %v", tc, allowed, rootPrivs)
+		}
+		if rootPrivs != tc.rootPrivs {
+			t.Fatalf("bad: case %#v: %v, %v", tc, allowed, rootPrivs)
+		}
+	}
+}
+
 var tokenCreationPolicy = `
 name = "tokenCreation"
 path "auth/token/create*" {
